@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/pivotalservices/cfbackup"
@@ -39,9 +40,20 @@ func (s *RedisPlugin) Backup() (err error) {
 	if sshConfigs, err = s.getSSHConfig(sharedPlanJobName); err == nil {
 		//take first node to execute restore on
 		sshConfig := sshConfigs[0]
-
+		lo.G.Debug("starting backup of shared plan")
 		s.GetScriptBackup(sshConfig, sharedPlanOutputFileName, "scripts/backup_shared.sh")
+		lo.G.Debug("done backup of shared plan")
+	}
 
+	if sshConfigs, err = s.getSSHConfig(dedicatedPlanJobName); err == nil {
+		//take first node to execute restore on
+		for _, sshConfig := range sshConfigs {
+			ip := sshConfig.Host
+			outputFileName := fmt.Sprintf(dedicatedPlanOutputFileName, ip)
+			lo.G.Debug(fmt.Sprintf("starting backup of dedicated plan on %s", ip))
+			s.GetScriptBackup(sshConfig, outputFileName, "scripts/backup_dedicated.sh")
+			lo.G.Debug(fmt.Sprintf("done backup of dedicated plan on %s", ip))
+		}
 	}
 	lo.G.Debug("done backup of redis-tile", err)
 	return
@@ -88,10 +100,12 @@ func (s *RedisPlugin) getSSHConfig(jobName string) (sshConfig []command.SshConfi
 }
 
 const (
-	pluginName               = "redis-tile"
-	productName              = "p-redis"
-	sharedPlanJobName        = "cf-redis-broker"
-	sharedPlanOutputFileName = "sharedVMPlan.tar"
+	pluginName                  = "redis-tile"
+	productName                 = "p-redis"
+	sharedPlanJobName           = "cf-redis-broker"
+	sharedPlanOutputFileName    = pluginName + "-sharedVMPlan.tar"
+	dedicatedPlanJobName        = "dedicated-node"
+	dedicatedPlanOutputFileName = pluginName + "-%s-dedicatedVMPlan.tar"
 
 	defaultSSHPort int = 22
 )

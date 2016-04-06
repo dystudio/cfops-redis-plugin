@@ -30,7 +30,7 @@ var _ = Describe("Given RedisPlugin", func() {
 			})
 		})
 	})
-	testInstallationSettings("./fixtures/installation-settings-1-6-aws.json")
+	testInstallationSettings("./fixtures/installation-settings-redis.json")
 })
 
 func testInstallationSettings(installationSettingsPath string) {
@@ -66,7 +66,7 @@ func testInstallationSettings(installationSettingsPath string) {
 
 				It("then it should have created right number of archive files", func() {
 					Ω(err).ShouldNot(HaveOccurred())
-					Ω(counter).Should(BeEquivalentTo(1))
+					Ω(counter).Should(BeEquivalentTo(6))
 				})
 			})
 		})
