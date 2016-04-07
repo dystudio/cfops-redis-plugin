@@ -47,7 +47,7 @@ func testInstallationSettings(installationSettingsPath string) {
 						Meta: cfopsplugin.Meta{
 							Name: "redis-tile",
 						},
-						GetScriptBackup: func(sshConfig command.SshConfig, outputFileName, scriptName string) (err error) {
+						GetRunScript: func(sshConfig command.SshConfig, outputFileName, scriptName string) (err error) {
 							counter++
 							return
 						},

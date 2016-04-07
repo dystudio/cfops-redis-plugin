@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/pivotalservices/cfbackup"
 	"github.com/pivotalservices/cfops-redis-plugin/generated"
@@ -41,7 +42,7 @@ func (s *RedisPlugin) Backup() (err error) {
 		//take first node to execute restore on
 		sshConfig := sshConfigs[0]
 		lo.G.Debug("starting backup of shared plan")
-		s.GetScriptBackup(sshConfig, sharedPlanOutputFileName, "scripts/backup_shared.sh")
+		s.GetRunScript(sshConfig, sharedPlanOutputFileName, "scripts/backupShared.sh")
 		lo.G.Debug("done backup of shared plan")
 	}
 
@@ -51,7 +52,7 @@ func (s *RedisPlugin) Backup() (err error) {
 			ip := sshConfig.Host
 			outputFileName := fmt.Sprintf(dedicatedPlanOutputFileName, ip)
 			lo.G.Debug(fmt.Sprintf("starting backup of dedicated plan on %s", ip))
-			s.GetScriptBackup(sshConfig, outputFileName, "scripts/backup_dedicated.sh")
+			s.GetRunScript(sshConfig, outputFileName, "scripts/backupDedicated.sh")
 			lo.G.Debug(fmt.Sprintf("done backup of dedicated plan on %s", ip))
 		}
 	}
@@ -59,12 +60,12 @@ func (s *RedisPlugin) Backup() (err error) {
 	return
 }
 
-func (s *RedisPlugin) runBackupScript(sshConfig command.SshConfig, outputFileName, scriptName string) (err error) {
+func (s *RedisPlugin) runScript(sshConfig command.SshConfig, outputFileName, scriptName string) (err error) {
 	var remoteExecuter command.Executer
 	var writer io.WriteCloser
 	var scriptBytes []byte
 	if remoteExecuter, err = NewRemoteExecuter(sshConfig); err == nil {
-		if writer, err = s.PivotalCF.NewArchiveWriter(outputFileName); err == nil {
+		if writer, err = s.getWriter(outputFileName); err == nil {
 			defer writer.Close()
 			if scriptBytes, err = generated.Asset(scriptName); err == nil {
 				err = remoteExecuter.Execute(writer, string(scriptBytes))
@@ -74,9 +75,28 @@ func (s *RedisPlugin) runBackupScript(sshConfig command.SshConfig, outputFileNam
 	return
 }
 
+func (s *RedisPlugin) getWriter(outputFileName string) (writer io.WriteCloser, err error) {
+	if outputFileName == "" {
+		writer = os.Stdout
+	} else {
+		writer, err = s.PivotalCF.NewArchiveWriter(outputFileName)
+	}
+	return
+}
+
 //Restore - method to execute restore
 func (s *RedisPlugin) Restore() (err error) {
-	panic("Restore not implemented")
+	lo.G.Debug("starting restore of redis-tile")
+	var sshConfigs []command.SshConfig
+	if sshConfigs, err = s.getSSHConfig(sharedPlanJobName); err == nil {
+		//take first node to execute restore on
+		sshConfig := sshConfigs[0]
+		lo.G.Debug("starting restore of shared plan")
+		s.GetRunScript(sshConfig, "", "scripts/restoreShared.sh")
+		lo.G.Debug("done restore of shared plan")
+	}
+	lo.G.Debug("done restore of redis-tile", err)
+	return
 }
 
 func (s *RedisPlugin) getSSHConfig(jobName string) (sshConfig []command.SshConfig, err error) {
@@ -117,7 +137,7 @@ func NewRedisPlugin() *RedisPlugin {
 			Name: pluginName,
 		},
 	}
-	redisPlugin.GetScriptBackup = redisPlugin.runBackupScript
+	redisPlugin.GetRunScript = redisPlugin.runScript
 	return redisPlugin
 }
 
@@ -126,5 +146,5 @@ type RedisPlugin struct {
 	PivotalCF            cfopsplugin.PivotalCF
 	InstallationSettings cfbackup.InstallationSettings
 	Meta                 cfopsplugin.Meta
-	GetScriptBackup      func(command.SshConfig, string, string) error
+	GetRunScript         func(command.SshConfig, string, string) error
 }
