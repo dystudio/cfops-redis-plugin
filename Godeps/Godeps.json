@@ -173,23 +173,23 @@
 		},
 		{
 			"ImportPath": "github.com/pivotalservices/cfbackup",
-			"Comment": "v0.1.0-164-g710c64e",
-			"Rev": "710c64ec44dc9d87b9c59fba093be53a2bcba7a5"
+			"Comment": "v0.1.0-166-g1a52b06",
+			"Rev": "1a52b0637c2103523d8342177ea188346f554941"
 		},
 		{
 			"ImportPath": "github.com/pivotalservices/cfbackup/tiles/opsmanager",
-			"Comment": "v0.1.0-164-g710c64e",
-			"Rev": "710c64ec44dc9d87b9c59fba093be53a2bcba7a5"
+			"Comment": "v0.1.0-166-g1a52b06",
+			"Rev": "1a52b0637c2103523d8342177ea188346f554941"
 		},
 		{
 			"ImportPath": "github.com/pivotalservices/cfops/plugin/cfopsplugin",
-			"Comment": "v2.2.0-1-g66cdf51",
-			"Rev": "66cdf5198f55357e6f6362b902f0aa9d438902a8"
+			"Comment": "v2.2.0-3-g6c668d8",
+			"Rev": "6c668d8b32eaa8e74efaaabb21086954966a9a53"
 		},
 		{
 			"ImportPath": "github.com/pivotalservices/cfops/tileregistry",
-			"Comment": "v2.2.0-1-g66cdf51",
-			"Rev": "66cdf5198f55357e6f6362b902f0aa9d438902a8"
+			"Comment": "v2.2.0-3-g6c668d8",
+			"Rev": "6c668d8b32eaa8e74efaaabb21086954966a9a53"
 		},
 		{
 			"ImportPath": "github.com/pivotalservices/gtils/bosh",
