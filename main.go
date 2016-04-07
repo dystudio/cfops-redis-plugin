@@ -106,6 +106,8 @@ func (s *RedisPlugin) Restore() (err error) {
 			if err = s.GetUploadFile(sshConfig, reader); err == nil {
 				err = s.GetRunScript(sshConfig, "", "scripts/restoreShared.sh")
 			}
+		} else {
+			lo.G.Info("Skipping restore of shared VM plan as file does not exist")
 		}
 		lo.G.Debug("done restore of shared plan")
 	}
@@ -123,6 +125,8 @@ func (s *RedisPlugin) Restore() (err error) {
 					err = s.GetRunScript(sshConfig, "", "scripts/restoreDedicated.sh")
 					lo.G.Debug(fmt.Sprintf("finished script on ip %s", ip), err)
 				}
+			} else {
+				lo.G.Info(fmt.Sprintf("Skipping restore of dedicated VM plan on %s as file does not exist", ip))
 			}
 			lo.G.Debug(fmt.Sprintf("done restore of dedicated plan on %s", ip))
 		}
