@@ -1,12 +1,11 @@
 #!/bin/bash
-target_dir=/var/vcap/store/redis/
-cd /var/vcap/store/tmp_backup/ && tar xvf /var/vcap/store/tmp_backup/redis-tile.tar
+target_dir=/var/vcap/store/redis
+cd /var/vcap/store/tmp_backup/ && tar xvf /var/vcap/store/tmp_backup/redis-tile.tar > /dev/null 2>&1
 echo "Restoring redis"
 redis_port=$(awk '/port/{print $2}' $target_dir/redis.conf)
 redis_pwd=$(awk '/requirepass/{print $2}' $target_dir/redis.conf)
-PID=$(cat $target_dir/redis-server.pid)
+PID=$(/usr/bin/pgrep redis-server)
 kill -9 $PID
-rm -rf $target_dir/redis-server.pid
 ## set to appendonly no
 sed -i 's/appendonly yes/appendonly no/g' $target_dir/redis.conf
 sed -i 's/rename-command BGREWRITEAOF ""/rename-command BGREWRITEAOF "BGREWRITEAOF"/g' $target_dir/redis.conf
@@ -25,7 +24,7 @@ do
     sleep 1
 done
 
-PID=$(cat $target_dir/redis-server.pid)
+PID=$(/usr/bin/pgrep redis-server)
 kill -9 $PID
 sed -i 's/appendonly no/appendonly yes/g' $target_dir/redis.conf
 sed -i 's/rename-command BGREWRITEAOF "BGREWRITEAOF"/rename-command BGREWRITEAOF ""/g' $target_dir/redis.conf

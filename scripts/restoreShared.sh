@@ -1,6 +1,6 @@
 #!/bin/bash
 target_dir=/var/vcap/store/cf-redis-broker/redis-data/
-cd /var/vcap/store/tmp_backup/ && tar xvf /var/vcap/store/tmp_backup/redis-tile.tar
+cd /var/vcap/store/tmp_backup/ && tar xvf /var/vcap/store/tmp_backup/redis-tile.tar > /dev/null 2>&1
 for FILE in /var/vcap/store/tmp_backup/redis-data/*; do
     if [[ -d $FILE ]]; then
        directoryName=$(basename $FILE)

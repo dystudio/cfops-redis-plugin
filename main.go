@@ -48,7 +48,6 @@ func (s *RedisPlugin) Backup() (err error) {
 	}
 
 	if sshConfigs, err = s.getSSHConfig(dedicatedPlanJobName); err == nil {
-		//take first node to execute restore on
 		for _, sshConfig := range sshConfigs {
 			ip := sshConfig.Host
 			outputFileName := fmt.Sprintf(dedicatedPlanOutputFileName, ip)
@@ -73,9 +72,10 @@ func (s *RedisPlugin) runScript(sshConfig command.SshConfig, outputFileName, scr
 	var scriptBytes []byte
 	if remoteExecuter, err = NewRemoteExecuter(sshConfig); err == nil {
 		if writer, err = s.getWriter(outputFileName); err == nil {
-			defer writer.Close()
 			if scriptBytes, err = generated.Asset(scriptName); err == nil {
+				lo.G.Info("Running script on ip ->", sshConfig.Host)
 				err = remoteExecuter.Execute(writer, string(scriptBytes))
+				lo.G.Info("Done running script on ip ->", sshConfig.Host, err)
 			}
 		}
 	}
@@ -87,6 +87,7 @@ func (s *RedisPlugin) getWriter(outputFileName string) (writer io.WriteCloser, e
 		writer = os.Stdout
 	} else {
 		writer, err = s.PivotalCF.NewArchiveWriter(outputFileName)
+		defer writer.Close()
 	}
 	return
 }
@@ -107,6 +108,24 @@ func (s *RedisPlugin) Restore() (err error) {
 			}
 		}
 		lo.G.Debug("done restore of shared plan")
+	}
+
+	if sshConfigs, err = s.getSSHConfig(dedicatedPlanJobName); err == nil {
+		for _, sshConfig := range sshConfigs {
+			ip := sshConfig.Host
+			outputFileName := fmt.Sprintf(dedicatedPlanOutputFileName, ip)
+			lo.G.Debug(fmt.Sprintf("starting restore of dedicated plan on %s using file %s", ip, outputFileName))
+			if reader, err = s.PivotalCF.NewArchiveReader(outputFileName); err == nil {
+				lo.G.Debug(fmt.Sprintf("uploading file %s to ip %s", outputFileName, ip))
+				defer reader.Close()
+				if err = s.GetUploadFile(sshConfig, reader); err == nil {
+					lo.G.Debug(fmt.Sprintf("running script on ip %s", ip))
+					err = s.GetRunScript(sshConfig, "", "scripts/restoreDedicated.sh")
+					lo.G.Debug(fmt.Sprintf("finished script on ip %s", ip), err)
+				}
+			}
+			lo.G.Debug(fmt.Sprintf("done restore of dedicated plan on %s", ip))
+		}
 	}
 	lo.G.Debug("done restore of redis-tile", err)
 	return
