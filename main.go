@@ -9,6 +9,7 @@ import (
 	"github.com/pivotalservices/cfops-redis-plugin/generated"
 	cfopsplugin "github.com/pivotalservices/cfops/plugin/cfopsplugin"
 	"github.com/pivotalservices/gtils/command"
+	"github.com/pivotalservices/gtils/osutils"
 	"github.com/xchapter7x/lo"
 )
 
@@ -60,6 +61,12 @@ func (s *RedisPlugin) Backup() (err error) {
 	return
 }
 
+func (s *RedisPlugin) uploadFile(sshConfig command.SshConfig, lfile io.Reader) (err error) {
+	remoteOps := osutils.NewRemoteOperationsWithPath(sshConfig, remoteArchivePath)
+	err = remoteOps.UploadFile(lfile)
+	return
+}
+
 func (s *RedisPlugin) runScript(sshConfig command.SshConfig, outputFileName, scriptName string) (err error) {
 	var remoteExecuter command.Executer
 	var writer io.WriteCloser
@@ -88,11 +95,17 @@ func (s *RedisPlugin) getWriter(outputFileName string) (writer io.WriteCloser, e
 func (s *RedisPlugin) Restore() (err error) {
 	lo.G.Debug("starting restore of redis-tile")
 	var sshConfigs []command.SshConfig
+	var reader io.ReadCloser
 	if sshConfigs, err = s.getSSHConfig(sharedPlanJobName); err == nil {
 		//take first node to execute restore on
 		sshConfig := sshConfigs[0]
 		lo.G.Debug("starting restore of shared plan")
-		s.GetRunScript(sshConfig, "", "scripts/restoreShared.sh")
+		if reader, err = s.PivotalCF.NewArchiveReader(sharedPlanOutputFileName); err == nil {
+			defer reader.Close()
+			if err = s.GetUploadFile(sshConfig, reader); err == nil {
+				err = s.GetRunScript(sshConfig, "", "scripts/restoreShared.sh")
+			}
+		}
 		lo.G.Debug("done restore of shared plan")
 	}
 	lo.G.Debug("done restore of redis-tile", err)
@@ -120,14 +133,14 @@ func (s *RedisPlugin) getSSHConfig(jobName string) (sshConfig []command.SshConfi
 }
 
 const (
-	pluginName                  = "redis-tile"
-	productName                 = "p-redis"
-	sharedPlanJobName           = "cf-redis-broker"
-	sharedPlanOutputFileName    = pluginName + "-sharedVMPlan.tar"
-	dedicatedPlanJobName        = "dedicated-node"
-	dedicatedPlanOutputFileName = pluginName + "-%s-dedicatedVMPlan.tar"
-
-	defaultSSHPort int = 22
+	pluginName                      = "redis-tile"
+	productName                     = "p-redis"
+	sharedPlanJobName               = "cf-redis-broker"
+	sharedPlanOutputFileName        = pluginName + "-sharedVMPlan.tar"
+	dedicatedPlanJobName            = "dedicated-node"
+	dedicatedPlanOutputFileName     = pluginName + "-%s-dedicatedVMPlan.tar"
+	remoteArchivePath               = "/var/vcap/store/tmp_backup/redis-tile.tar"
+	defaultSSHPort              int = 22
 )
 
 //NewRedisPlugin - Contructor helper
@@ -138,6 +151,7 @@ func NewRedisPlugin() *RedisPlugin {
 		},
 	}
 	redisPlugin.GetRunScript = redisPlugin.runScript
+	redisPlugin.GetUploadFile = redisPlugin.uploadFile
 	return redisPlugin
 }
 
@@ -147,4 +161,5 @@ type RedisPlugin struct {
 	InstallationSettings cfbackup.InstallationSettings
 	Meta                 cfopsplugin.Meta
 	GetRunScript         func(command.SshConfig, string, string) error
+	GetUploadFile        func(sshConfig command.SshConfig, lfile io.Reader) error
 }

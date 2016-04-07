@@ -39,3 +39,4 @@ for FILE in /var/vcap/store/tmp_backup/redis-data/*; do
     fi
 done
 rm -rf /var/vcap/store/tmp_backup/redis-data
+rm -rf /var/vcap/store/tmp_backup/redis-tile.tar

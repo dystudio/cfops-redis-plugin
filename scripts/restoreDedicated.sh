@@ -29,4 +29,6 @@ PID=$(cat $target_dir/redis-server.pid)
 kill -9 $PID
 sed -i 's/appendonly no/appendonly yes/g' $target_dir/redis.conf
 sed -i 's/rename-command BGREWRITEAOF "BGREWRITEAOF"/rename-command BGREWRITEAOF ""/g' $target_dir/redis.conf
+
 rm -rf /var/vcap/store/tmp_backup/redis
+rm -rf /var/vcap/store/tmp_backup/redis-tile.tar
