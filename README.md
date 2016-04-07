@@ -1,7 +1,7 @@
 # cfops-redis-plugin
 cfops-redis-plugin
 
-### Version Compatibility
+### Version Compatibility ###
 Requires 2.2.4+ of cfops
 
 ### Shared VM Backup/Restore ###
