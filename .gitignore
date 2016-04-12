@@ -26,3 +26,4 @@ coverage.out
 main
 notes.txt
 issues.md
+/vendor
