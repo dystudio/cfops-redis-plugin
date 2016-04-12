@@ -3,7 +3,7 @@
 EXITCODE=0;
 WATERMARK=$2;
 TESTDIR=$1
-godep go test -cover -coverprofile=coverage.out ${TESTDIR} | {
+go test -cover -coverprofile=coverage.out ${TESTDIR} | {
   while read -r COVEROUTPUT;do
     echo ${COVEROUTPUT};
 
