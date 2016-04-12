@@ -23,7 +23,7 @@ _testmain.go
 *.test
 *.prof
 coverage.out
-main
+cfops-redis-plugin
 notes.txt
 issues.md
 /vendor

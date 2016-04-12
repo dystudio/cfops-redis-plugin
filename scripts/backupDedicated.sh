@@ -13,6 +13,6 @@ then
   done
   cd /var/vcap/store/ && tar cz redis
 else
-  echo "$FILE/redis.conf is not writable" 1>&2
+  echo "$FILE/redis.conf is not writable"
 	exit 1
 fi

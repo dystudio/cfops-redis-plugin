@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -43,7 +44,10 @@ func (s *RedisPlugin) Backup() (err error) {
 		//take first node to execute restore on
 		sshConfig := sshConfigs[0]
 		lo.G.Debug("starting backup of shared plan")
-		s.GetRunScript(sshConfig, sharedPlanOutputFileName, "scripts/backupShared.sh")
+		if err = s.GetRunScript(sshConfig, sharedPlanOutputFileName, "scripts/backupShared.sh"); err != nil {
+			s.printBackupError(sharedPlanOutputFileName)
+		}
+
 		lo.G.Debug("done backup of shared plan")
 	}
 
@@ -52,12 +56,23 @@ func (s *RedisPlugin) Backup() (err error) {
 			ip := sshConfig.Host
 			outputFileName := fmt.Sprintf(dedicatedPlanOutputFileName, ip)
 			lo.G.Debug(fmt.Sprintf("starting backup of dedicated plan on %s", ip))
-			s.GetRunScript(sshConfig, outputFileName, "scripts/backupDedicated.sh")
+			if err = s.GetRunScript(sshConfig, outputFileName, "scripts/backupDedicated.sh"); err != nil {
+				s.printBackupError(sharedPlanOutputFileName)
+			}
 			lo.G.Debug(fmt.Sprintf("done backup of dedicated plan on %s", ip))
 		}
 	}
 	lo.G.Debug("done backup of redis-tile", err)
 	return
+}
+
+func (s *RedisPlugin) printBackupError(fileName string) {
+	if reader, err := s.PivotalCF.NewArchiveReader(fileName); err == nil {
+		defer reader.Close()
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(reader)
+		lo.G.Error(buf.String())
+	}
 }
 
 func (s *RedisPlugin) uploadFile(sshConfig command.SshConfig, lfile io.Reader) (err error) {
@@ -72,6 +87,9 @@ func (s *RedisPlugin) runScript(sshConfig command.SshConfig, outputFileName, scr
 	var scriptBytes []byte
 	if remoteExecuter, err = NewRemoteExecuter(sshConfig); err == nil {
 		if writer, err = s.getWriter(outputFileName); err == nil {
+			if outputFileName != "" {
+				defer writer.Close()
+			}
 			if scriptBytes, err = generated.Asset(scriptName); err == nil {
 				lo.G.Info("Running script on ip ->", sshConfig.Host)
 				err = remoteExecuter.Execute(writer, string(scriptBytes))
@@ -87,7 +105,6 @@ func (s *RedisPlugin) getWriter(outputFileName string) (writer io.WriteCloser, e
 		writer = os.Stdout
 	} else {
 		writer, err = s.PivotalCF.NewArchiveWriter(outputFileName)
-		defer writer.Close()
 	}
 	return
 }
