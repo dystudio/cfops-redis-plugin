@@ -1,10 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/pivotalservices/cfbackup"
 	"github.com/pivotalservices/cfops-redis-plugin/generated"
@@ -44,10 +44,9 @@ func (s *RedisPlugin) Backup() (err error) {
 		//take first node to execute restore on
 		sshConfig := sshConfigs[0]
 		lo.G.Debug("starting backup of shared plan")
-		if err = s.GetRunScript(sshConfig, sharedPlanOutputFileName, "scripts/backupShared.sh"); err != nil {
-			s.printBackupError(sharedPlanOutputFileName)
+		if err = s.GetRunScript(sshConfig, "scripts/backupShared.sh"); err == nil {
+			s.getTarFile(sshConfig, sharedPlanOutputFileName, "cd /var/vcap/store/cf-redis-broker/ && tar cz redis-data")
 		}
-
 		lo.G.Debug("done backup of shared plan")
 	}
 
@@ -56,8 +55,8 @@ func (s *RedisPlugin) Backup() (err error) {
 			ip := sshConfig.Host
 			outputFileName := fmt.Sprintf(dedicatedPlanOutputFileName, ip)
 			lo.G.Debug(fmt.Sprintf("starting backup of dedicated plan on %s", ip))
-			if err = s.GetRunScript(sshConfig, outputFileName, "scripts/backupDedicated.sh"); err != nil {
-				s.printBackupError(sharedPlanOutputFileName)
+			if err = s.GetRunScript(sshConfig, "scripts/backupDedicated.sh"); err == nil {
+				s.getTarFile(sshConfig, outputFileName, "cd /var/vcap/store/ && tar cz redis")
 			}
 			lo.G.Debug(fmt.Sprintf("done backup of dedicated plan on %s", ip))
 		}
@@ -66,45 +65,42 @@ func (s *RedisPlugin) Backup() (err error) {
 	return
 }
 
-func (s *RedisPlugin) printBackupError(fileName string) {
-	if reader, err := s.PivotalCF.NewArchiveReader(fileName); err == nil {
-		defer reader.Close()
-		buf := new(bytes.Buffer)
-		buf.ReadFrom(reader)
-		lo.G.Error(buf.String())
-	}
-}
-
-func (s *RedisPlugin) uploadFile(sshConfig command.SshConfig, lfile io.Reader) (err error) {
-	remoteOps := osutils.NewRemoteOperationsWithPath(sshConfig, remoteArchivePath)
-	err = remoteOps.UploadFile(lfile)
-	return
-}
-
-func (s *RedisPlugin) runScript(sshConfig command.SshConfig, outputFileName, scriptName string) (err error) {
-	var remoteExecuter command.Executer
+func (s *RedisPlugin) getTarFile(sshConfig command.SshConfig, outputFileName string, cmd string) (err error) {
 	var writer io.WriteCloser
-	var scriptBytes []byte
+	var remoteExecuter command.Executer
 	if remoteExecuter, err = NewRemoteExecuter(sshConfig); err == nil {
-		if writer, err = s.getWriter(outputFileName); err == nil {
-			if outputFileName != "" {
-				defer writer.Close()
-			}
-			if scriptBytes, err = generated.Asset(scriptName); err == nil {
-				lo.G.Info("Running script on ip ->", sshConfig.Host)
-				err = remoteExecuter.Execute(writer, string(scriptBytes))
-				lo.G.Info("Done running script on ip ->", sshConfig.Host, err)
-			}
+		if writer, err = s.PivotalCF.NewArchiveWriter(outputFileName); err == nil {
+			defer writer.Close()
+			lo.G.Info("creating tar file from backup on ip ->", sshConfig.Host)
+			err = remoteExecuter.Execute(writer, cmd)
+			lo.G.Info("done creating tar file from backup on ip ->", sshConfig.Host, err)
 		}
 	}
 	return
 }
 
-func (s *RedisPlugin) getWriter(outputFileName string) (writer io.WriteCloser, err error) {
-	if outputFileName == "" {
+func (s *RedisPlugin) uploadFile(sshConfig command.SshConfig, lfile io.Reader, path string) (err error) {
+	remoteOps := osutils.NewRemoteOperationsWithPath(sshConfig, path)
+	err = remoteOps.UploadFile(lfile)
+	return
+}
+
+func (s *RedisPlugin) runScript(sshConfig command.SshConfig, scriptName string) (err error) {
+	var remoteExecuter command.Executer
+	var writer io.WriteCloser
+	var scriptBytes []byte
+	if remoteExecuter, err = NewRemoteExecuter(sshConfig); err == nil {
 		writer = os.Stdout
-	} else {
-		writer, err = s.PivotalCF.NewArchiveWriter(outputFileName)
+		if scriptBytes, err = generated.Asset(scriptName); err == nil {
+			reader := strings.NewReader(string(scriptBytes))
+			lo.G.Info("uploading script on ip ->", sshConfig.Host)
+			if err = s.GetUploadFile(sshConfig, reader, remoteScriptPath); err == nil {
+				lo.G.Info("Running script on ip ->", sshConfig.Host)
+				var commandToRun = fmt.Sprintf("chmod +x %s && echo %s | sudo -S %s", remoteScriptPath, sshConfig.Password, remoteScriptPath)
+				err = remoteExecuter.Execute(writer, commandToRun)
+				lo.G.Info("Done running script on ip ->", sshConfig.Host, err)
+			}
+		}
 	}
 	return
 }
@@ -120,8 +116,8 @@ func (s *RedisPlugin) Restore() (err error) {
 		lo.G.Debug("starting restore of shared plan")
 		if reader, err = s.PivotalCF.NewArchiveReader(sharedPlanOutputFileName); err == nil {
 			defer reader.Close()
-			if err = s.GetUploadFile(sshConfig, reader); err == nil {
-				err = s.GetRunScript(sshConfig, "", "scripts/restoreShared.sh")
+			if err = s.GetUploadFile(sshConfig, reader, remoteArchivePath); err == nil {
+				err = s.GetRunScript(sshConfig, "scripts/restoreShared.sh")
 			}
 		} else {
 			lo.G.Info("Skipping restore of shared VM plan as file does not exist")
@@ -137,9 +133,9 @@ func (s *RedisPlugin) Restore() (err error) {
 			if reader, err = s.PivotalCF.NewArchiveReader(outputFileName); err == nil {
 				lo.G.Debug(fmt.Sprintf("uploading file %s to ip %s", outputFileName, ip))
 				defer reader.Close()
-				if err = s.GetUploadFile(sshConfig, reader); err == nil {
+				if err = s.GetUploadFile(sshConfig, reader, remoteArchivePath); err == nil {
 					lo.G.Debug(fmt.Sprintf("running script on ip %s", ip))
-					err = s.GetRunScript(sshConfig, "", "scripts/restoreDedicated.sh")
+					err = s.GetRunScript(sshConfig, "scripts/restoreDedicated.sh")
 					lo.G.Debug(fmt.Sprintf("finished script on ip %s", ip), err)
 				}
 			} else {
@@ -180,6 +176,7 @@ const (
 	dedicatedPlanJobName            = "dedicated-node"
 	dedicatedPlanOutputFileName     = pluginName + "-%s-dedicatedVMPlan.tar"
 	remoteArchivePath               = "/var/vcap/store/tmp_backup/redis-tile.tar"
+	remoteScriptPath                = "/var/vcap/store/tmp_backup/execute.sh"
 	defaultSSHPort              int = 22
 )
 
@@ -200,6 +197,6 @@ type RedisPlugin struct {
 	PivotalCF            cfopsplugin.PivotalCF
 	InstallationSettings cfbackup.InstallationSettings
 	Meta                 cfopsplugin.Meta
-	GetRunScript         func(command.SshConfig, string, string) error
-	GetUploadFile        func(sshConfig command.SshConfig, lfile io.Reader) error
+	GetRunScript         func(command.SshConfig, string) error
+	GetUploadFile        func(sshConfig command.SshConfig, lfile io.Reader, path string) error
 }
