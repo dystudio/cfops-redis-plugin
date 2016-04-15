@@ -55,6 +55,10 @@ func testInstallationSettings(installationSettingsPath string) {
 
 							return
 						},
+						GetTarFile: func(sshConfig command.SshConfig, fileName string, cmd string) (err error) {
+
+							return
+						},
 					}
 					configParser := cfbackup.NewConfigurationParser(installationSettingsPath)
 					pivotalCF := cfopsplugin.NewPivotalCF(configParser.InstallationSettings, tileregistry.TileSpec{

@@ -45,7 +45,7 @@ func (s *RedisPlugin) Backup() (err error) {
 		sshConfig := sshConfigs[0]
 		lo.G.Debug("starting backup of shared plan")
 		if err = s.GetRunScript(sshConfig, "scripts/backupShared.sh"); err == nil {
-			s.getTarFile(sshConfig, sharedPlanOutputFileName, "cd /var/vcap/store/cf-redis-broker/ && tar cz redis-data")
+			s.GetTarFile(sshConfig, sharedPlanOutputFileName, "cd /var/vcap/store/cf-redis-broker/ && tar cz redis-data")
 		}
 		lo.G.Debug("done backup of shared plan")
 	}
@@ -56,7 +56,7 @@ func (s *RedisPlugin) Backup() (err error) {
 			outputFileName := fmt.Sprintf(dedicatedPlanOutputFileName, ip)
 			lo.G.Debug(fmt.Sprintf("starting backup of dedicated plan on %s", ip))
 			if err = s.GetRunScript(sshConfig, "scripts/backupDedicated.sh"); err == nil {
-				s.getTarFile(sshConfig, outputFileName, "cd /var/vcap/store/ && tar cz redis")
+				s.GetTarFile(sshConfig, outputFileName, "cd /var/vcap/store/ && tar cz redis")
 			}
 			lo.G.Debug(fmt.Sprintf("done backup of dedicated plan on %s", ip))
 		}
@@ -189,6 +189,7 @@ func NewRedisPlugin() *RedisPlugin {
 	}
 	redisPlugin.GetRunScript = redisPlugin.runScript
 	redisPlugin.GetUploadFile = redisPlugin.uploadFile
+	redisPlugin.GetTarFile = redisPlugin.getTarFile
 	return redisPlugin
 }
 
@@ -199,4 +200,5 @@ type RedisPlugin struct {
 	Meta                 cfopsplugin.Meta
 	GetRunScript         func(command.SshConfig, string) error
 	GetUploadFile        func(sshConfig command.SshConfig, lfile io.Reader, path string) error
+	GetTarFile           func(sshConfig command.SshConfig, outputFileName string, cmd string) (err error)
 }
