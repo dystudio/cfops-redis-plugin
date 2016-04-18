@@ -10,29 +10,37 @@ for FILE in /var/vcap/store/tmp_backup/redis-data/*; do
           redis_port=$(awk '/port/{print $2}' $installDir/redis.conf)
           redis_pwd=$(awk '/requirepass/{print $2}' $installDir/redis.conf)
           PID=$(cat $installDir/redis-server.pid)
+          echo "stopping server with PID $PID"
           kill -9 $PID
           rm -rf $installDir/redis-server.pid
           ## set to appendonly no
           sed -i 's/appendonly yes/appendonly no/g' $installDir/redis.conf
-          sed -i 's/rename-command BGREWRITEAOF ""/rename-command BGREWRITEAOF "BGREWRITEAOF"/g' $installDir/redis.conf
+          sed -i 's/rename-command BGREWRITEAOF ""/#rename-command BGREWRITEAOF ""/g' $installDir/redis.conf
+          cat $installDir/redis.conf | grep BGREWRITEAOF
           rm -rf $installDir/db/*
           cp /var/vcap/store/tmp_backup/redis-data/$directoryName/db/dump.rdb $installDir/db/.
           chmod 660 $installDir/db/dump.rdb
 
+          echo "Waiting for server to start on port $redis_port"
           while ! nc -q 1 localhost $redis_port </dev/null; do sleep 10; done
-          targetProgressStatus=$(/var/vcap/packages/redis/bin/redis-cli -h 127.0.0.1 -p $redis_port -a $redis_pwd info | grep 'aof_rewrite_in_progress')
-          /var/vcap/packages/redis/bin/redis-cli -h 127.0.0.1 -p $redis_port -a $redis_pwd BGREWRITEAOF
-          progressStatus=$(/var/vcap/packages/redis/bin/redis-cli -h 127.0.0.1 -p $redis_port -a $redis_pwd info | grep 'aof_rewrite_in_progress')
-          until [ "$progressStatus" == "$targetProgressStatus" ]
-          do
+            targetProgressStatus=$(/var/vcap/packages/redis/bin/redis-cli -h 127.0.0.1 -p $redis_port -a $redis_pwd info | grep 'aof_rewrite_in_progress')
+            echo "Target Progress Status $targetProgressStatus"
+            sleep 10
+            /var/vcap/packages/redis/bin/redis-cli -h 127.0.0.1 -p $redis_port -a $redis_pwd BGREWRITEAOF
             progressStatus=$(/var/vcap/packages/redis/bin/redis-cli -h 127.0.0.1 -p $redis_port -a $redis_pwd info | grep 'aof_rewrite_in_progress')
-            sleep 1
-          done
+            echo "Progress Status $progressStatus"
+            until [ "$progressStatus" == "$targetProgressStatus" ]
+            do
+              progressStatus=$(/var/vcap/packages/redis/bin/redis-cli -h 127.0.0.1 -p $redis_port -a $redis_pwd info | grep 'aof_rewrite_in_progress')
+              echo "Progress Status $progressStatus"
+              sleep 1
+            done
 
           PID=$(cat $installDir/redis-server.pid)
+          echo "stopping server with PID $PID"
           kill -9 $PID
           sed -i 's/appendonly no/appendonly yes/g' $installDir/redis.conf
-          sed -i 's/rename-command BGREWRITEAOF "BGREWRITEAOF"/rename-command BGREWRITEAOF ""/g' $installDir/redis.conf
+          sed -i 's/#rename-command BGREWRITEAOF ""/rename-command BGREWRITEAOF ""/g' $installDir/redis.conf
        else
           echo "$installDir doesn't exist"
        fi
