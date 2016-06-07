@@ -48,6 +48,7 @@ func (s *RedisPlugin) Backup() (err error) {
 			s.GetTarFile(sshConfig, sharedPlanOutputFileName, "cd /var/vcap/store/cf-redis-broker/ && tar cz redis-data")
 		}
 		lo.G.Debug("done backup of shared plan")
+		s.GetStateFileJSON(sshConfig)
 	}
 
 	if sshConfigs, err = s.getSSHConfig(dedicatedPlanJobName); err == nil {
@@ -62,6 +63,29 @@ func (s *RedisPlugin) Backup() (err error) {
 		}
 	}
 	lo.G.Debug("done backup of redis-tile", err)
+	return
+}
+
+func (s *RedisPlugin) getStateFileJSON(sshConfig command.SshConfig) (err error) {
+	var writer io.WriteCloser
+	var remoteExecuter command.Executer
+	if remoteExecuter, err = NewRemoteExecuter(sshConfig); err == nil {
+		if writer, err = s.PivotalCF.NewArchiveWriter(statefileOutputFileName); err == nil {
+			defer writer.Close()
+			lo.G.Info("getting statefile.json file from ip ->", sshConfig.Host)
+			err = remoteExecuter.Execute(writer, "cat /var/vcap/store/cf-redis-broker/statefile.json")
+			lo.G.Info("done getting statefile.json file from ip ->", sshConfig.Host, err)
+		}
+	}
+	return
+}
+
+func (s *RedisPlugin) uploadStateFileJSON(sshConfig command.SshConfig) (err error) {
+	var reader io.ReadCloser
+	if reader, err = s.PivotalCF.NewArchiveReader(statefileOutputFileName); err == nil {
+		defer reader.Close()
+		err = s.GetUploadFile(sshConfig, reader, "/var/vcap/store/cf-redis-broker/statefile.json")
+	}
 	return
 }
 
@@ -119,6 +143,7 @@ func (s *RedisPlugin) Restore() (err error) {
 			if err = s.GetUploadFile(sshConfig, reader, remoteArchivePath); err == nil {
 				err = s.GetRunScript(sshConfig, "scripts/restoreShared.sh")
 			}
+			s.UploadStateFileJSON(sshConfig)
 		} else {
 			lo.G.Info("Skipping restore of shared VM plan as file does not exist")
 		}
@@ -173,6 +198,7 @@ const (
 	productName                     = "p-redis"
 	sharedPlanJobName               = "cf-redis-broker"
 	sharedPlanOutputFileName        = pluginName + "-sharedVMPlan.tar"
+	statefileOutputFileName         = pluginName + "-statefile.json"
 	dedicatedPlanJobName            = "dedicated-node"
 	dedicatedPlanOutputFileName     = pluginName + "-%s-dedicatedVMPlan.tar"
 	remoteArchivePath               = "/var/vcap/store/tmp_backup/redis-tile.tar"
@@ -190,6 +216,8 @@ func NewRedisPlugin() *RedisPlugin {
 	redisPlugin.GetRunScript = redisPlugin.runScript
 	redisPlugin.GetUploadFile = redisPlugin.uploadFile
 	redisPlugin.GetTarFile = redisPlugin.getTarFile
+	redisPlugin.GetStateFileJSON = redisPlugin.getStateFileJSON
+	redisPlugin.UploadStateFileJSON = redisPlugin.uploadStateFileJSON
 	return redisPlugin
 }
 
@@ -201,4 +229,6 @@ type RedisPlugin struct {
 	GetRunScript         func(command.SshConfig, string) error
 	GetUploadFile        func(sshConfig command.SshConfig, lfile io.Reader, path string) error
 	GetTarFile           func(sshConfig command.SshConfig, outputFileName string, cmd string) (err error)
+	GetStateFileJSON     func(sshConfig command.SshConfig) (err error)
+	UploadStateFileJSON  func(sshConfig command.SshConfig) (err error)
 }

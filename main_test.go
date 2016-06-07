@@ -59,6 +59,14 @@ func testInstallationSettings(installationSettingsPath string) {
 
 							return
 						},
+						GetStateFileJSON: func(sshConfig command.SshConfig) (err error) {
+
+							return
+						},
+						UploadStateFileJSON: func(sshConfig command.SshConfig) (err error) {
+
+							return
+						},
 					}
 					configParser := cfbackup.NewConfigurationParser(installationSettingsPath)
 					pivotalCF := cfopsplugin.NewPivotalCF(configParser.InstallationSettings, tileregistry.TileSpec{
